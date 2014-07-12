@@ -23,4 +23,4 @@ ActivitySchema.pre('save', function(next) {
   next();
 })
 
-module.exports = mongoose.model('Activity', ActivitySchema);
+module.exports = mongoose.model('FreshlyActivity', ActivitySchema);
