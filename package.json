@@ -1,0 +1,23 @@
+{
+  "name": "freshlyapi",
+  "version": "0.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/gjtrowbridge/freshlyapi.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gjtrowbridge/freshlyapi/issues"
+  },
+  "homepage": "https://github.com/gjtrowbridge/freshlyapi",
+  "dependencies": {
+    "express": "^4.5.1"
+  }
+}
