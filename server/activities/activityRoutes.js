@@ -3,7 +3,7 @@ var Activity = require('./activityModel.js');
 
 var router = express.Router();
 
-router.route('/activity/:activity_id')
+router.route('/activities/:activity_id')
 
   .get(function(req, res) {
     //Find activity
