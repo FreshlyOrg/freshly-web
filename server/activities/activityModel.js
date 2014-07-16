@@ -4,6 +4,8 @@ var Schema = mongoose.Schema;
 var ActivitySchema = new Schema({
   name: String,
   description: String,
+  cost: String,
+  time: String,
   lat: Number,
   lng: Number,
   tags: {
