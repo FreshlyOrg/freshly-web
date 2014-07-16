@@ -4,6 +4,8 @@ var Schema = mongoose.Schema;
 var ActivitySchema = new Schema({
   name: String,
   description: String,
+  lat: Number,
+  lng: Number,
   tags: {
     type: Array,
     'default': []
@@ -23,4 +25,6 @@ ActivitySchema.pre('save', function(next) {
   next();
 })
 
+
 module.exports = mongoose.model('FreshlyActivity', ActivitySchema);
+

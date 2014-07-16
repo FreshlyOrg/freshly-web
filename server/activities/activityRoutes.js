@@ -33,6 +33,8 @@ router.route('/activities/:activity_id')
       //Update activity
       activity.name = req.body.name;
       activity.description = req.body.description;
+      activity.lat = req.body.lat;
+      activity.lng = req.body.lng;
       activity.tags = req.body.tags;
 
       //Save activity
@@ -70,9 +72,11 @@ router.route('/activities/:activity_id')
 
 //Handles interactions at /api/activities
 router.route('/activities')
-  
+
+
   //Handles querying of all activities
   .get(function(req, res) {
+
     Activity.find(function(err, activities) {
       
       //Return errors if necessary
@@ -93,6 +97,8 @@ router.route('/activities')
     var activity = new Activity();
     activity.name = req.body.name;
     activity.description = req.body.description;
+    activity.lat = req.body.lat;
+    activity.lng = req.body.lng;
     activity.tags = req.body.tags;
 
     //Save activity
