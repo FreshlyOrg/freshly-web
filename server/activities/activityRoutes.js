@@ -57,7 +57,7 @@ module.exports = function(mongoose) {
 
           busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
             console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
-            var filePresent = true;
+            filePresent = true;
 
             var writeStream = gfs.createWriteStream({
               filename: filename, 
@@ -77,6 +77,7 @@ module.exports = function(mongoose) {
                   res.send(err);
                   return;
                 }
+
                 res.json({ 
                   message: 'Image added to activity',
                   activity_id: activity._id
