@@ -38,6 +38,69 @@ module.exports = function(mongoose) {
           }
         });
       });
+    })
+
+    .put(function(req, res) {
+      Activity.findById(req.params.activity_id, function(err, activity) {
+        if (err) {
+          res.send(err);
+          return;
+        }
+
+        var imageId = activity.imageIds[req.params.image_number];
+
+        gfs.exist({'_id': imageId}, function(err, found) {
+          if (err) {
+            res.send(err);
+            return;
+          }
+          
+          //Updates the currently saved image
+          if (found) {
+            try {
+              //If the activity exists, add the image
+              var busboy = new Busboy({headers: req.headers});
+              var filePresent = false;
+
+              busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+                console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
+                filePresent = true;
+
+                var writeStream = gfs.createWriteStream({
+                  '_id': imageId,
+                  filename: filename, 
+                  content_type: mimetype, 
+                  mode: 'w'
+                });
+
+                file.pipe(writeStream);
+                writeStream.on("close", function(file) {
+                  res.json({ 
+                    message: 'Activity image updated',
+                    activity_id: activity._id
+                  });
+                });
+              });
+
+              busboy.on('finish', function() {
+                if (!filePresent) {
+                  res.json({
+                    message: 'Must upload a file'
+                  });
+                }
+              });
+
+              req.pipe(busboy);
+            } catch(err) {
+              res.send({
+                message: 'Invalid data sent: doing nothing.'
+              });
+            }
+          } else {
+            res.json({message: 'Image not found'});
+          }
+        });
+      });
     });
 
   router.route('/:activity_id/images')
@@ -50,7 +113,7 @@ module.exports = function(mongoose) {
         }
 
         try {
-
+          
           //If the activity exists, add the image
           var busboy = new Busboy({headers: req.headers});
           var filePresent = false;
