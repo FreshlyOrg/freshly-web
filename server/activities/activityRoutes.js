@@ -22,6 +22,13 @@ module.exports = function(mongoose) {
           return;
         }
 
+        if (!activity) {
+          res.json({ 
+            message: 'Activity does not exist',
+            activity_id: req.params.activity_id
+          });
+          return;
+        }
         var imageId = activity.imageIds[req.params.image_number];
 
         gfs.exist({'_id': imageId}, function(err, found) {
@@ -46,7 +53,13 @@ module.exports = function(mongoose) {
           res.send(err);
           return;
         }
-
+        if (!activity) {
+          res.json({ 
+            message: 'Activity does not exist',
+            activity_id: req.params.activity_id
+          });
+          return;
+        }
         var imageId = activity.imageIds[req.params.image_number];
 
         gfs.exist({'_id': imageId}, function(err, found) {
@@ -113,7 +126,7 @@ module.exports = function(mongoose) {
         }
 
         try {
-          
+
           //If the activity exists, add the image
           var busboy = new Busboy({headers: req.headers});
           var filePresent = false;
@@ -222,23 +235,63 @@ module.exports = function(mongoose) {
     })
 
     .delete(function(req, res) {
-      Activity.remove({
-        _id: req.params.activity_id
-      }, function(err, activity) {
-        //Return errors if necessary
+      //Deletes activity
+      Activity.findByIdAndRemove(req.params.activity_id,{},function(err, activity) {
         if (err) {
           res.send(err);
           return;
         }
 
-        //Return message on success
-        res.json({ message: 'Successfully deleted' });
+        var toDelete = activity.imageIds.length;
+        console.log('todelete is: ') + toDelete;
+        if (toDelete === 0) {
+          res.json({
+            message: 'This activity and all images attached to this activity have been deleted',
+            activity: activity
+          });
+        } else {    
+          for (var i=0; i<activity.imageIds.length; i++) {
+            (function() {
+              var imageId = activity.imageIds[i];
+              gfs.exist({'_id': imageId}, function(err, found) {
+                if (err) {
+                  res.send(err);
+                  return;
+                }
+
+                if (found) {
+                  console.log('removing ' + i);
+                  gfs.remove({'_id': imageId}, function(err) {
+                    if (err) {
+                      res.send(err);
+                      return;
+                    }
+                    toDelete--;
+                    if (toDelete === 0) {
+                      res.json({
+                        message: 'This activity and all images attached to this activity have been deleted',
+                        activity: activity
+                      });
+                    }
+                  });
+                } else {
+                  toDelete--;
+                  if (toDelete === 0) {
+                    res.json({
+                      message: 'This activity and all images attached to this activity have been deleted',
+                      activity: activity
+                    });
+                  }
+                }
+              });
+            })();
+          }
+        }
       });
     });
 
   //Handles interactions at /api/activities
   router.route('/')
-
 
     //Handles querying of all activities
     .get(function(req, res) {
