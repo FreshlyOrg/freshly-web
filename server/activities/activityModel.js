@@ -15,7 +15,7 @@ var ActivitySchema = new Schema({
   imageIds: {
     type: Array,
     'default': []
-  }
+  },
   created_at: { type: Date },
   updated_at: { type: Date }
 });

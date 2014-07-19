@@ -5,8 +5,8 @@ module.exports = function(mongoose) {
   var Grid = require('gridfs-stream');
   var Busboy = require('busboy');
 
+  //Used to parse and store incoming images
   Grid.mongo = mongoose.mongo;
-
   var gfs;
   mongoose.connection.once('open', function() {
     gfs = Grid(mongoose.connection.db);
@@ -14,15 +14,78 @@ module.exports = function(mongoose) {
 
   var router = express.Router();
 
-  router.route('/:activity_id/images/:image_id')
+  router.route('/:activity_id/images/:image_number')
     .get(function(req, res) {
-      res.json({message:'got here'});
+      Activity.findById(req.params.activity_id, function(err, activity) {
+        if (err) {
+          res.send(err);
+          return;
+        }
+
+        var imageId = activity.imageIds[req.params.image_number];
+
+        gfs.exist({'_id': imageId}, function(err, found) {
+          if (err) {
+            res.send(err);
+            return;
+          }
+          
+          if (found) {
+            var readStream = gfs.createReadStream({'_id': imageId});
+            readStream.pipe(res);
+          } else {
+            res.json({message: 'Image not found'});
+          }
+        });
+      });
     });
 
   router.route('/:activity_id/images')
     //Adds an image and links it to the given activity
     .post(function(req, res) {
-      
+      Activity.findById(req.params.activity_id, function(err, activity) {
+        if (err) {
+          res.send(err);
+          return;
+        }
+
+        //If the activity exists, add the image
+        var busboy = new Busboy({headers: req.headers});
+        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+          console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
+
+          var writeStream = gfs.createWriteStream({
+            filename: filename, 
+            content_type: mimetype, 
+            mode: 'w'
+          });
+
+          file.pipe(writeStream);
+          writeStream.on("close", function(file) {
+
+            activity.imageIds.push(file._id);
+
+            //Save activity
+            activity.save(function(err, activity) {
+              //Return errors if necessary
+              if (err) {
+                res.send(err);
+                return;
+              }
+              res.json({ 
+                message: 'Image added to activity',
+                activity_id: activity._id
+              });
+            });
+          });
+        });
+
+        // busboy.on('finish', function() {
+
+        // });
+
+        req.pipe(busboy);
+      });
     });
 
   router.route('/:activity_id')
