@@ -3,6 +3,8 @@ module.exports = function(mongoose) {
   var express = require('express');
   var Activity = require('./activityModel.js');
   var Grid = require('gridfs-stream');
+  var Busboy = require('busboy');
+
   Grid.mongo = mongoose.mongo;
 
   var gfs;
@@ -15,6 +17,12 @@ module.exports = function(mongoose) {
   router.route('/:activity_id/images/:image_id')
     .get(function(req, res) {
       res.json({message:'got here'});
+    });
+
+  router.route('/:activity_id/images')
+    //Adds an image and links it to the given activity
+    .post(function(req, res) {
+      
     });
 
   router.route('/:activity_id')
