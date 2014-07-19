@@ -12,6 +12,11 @@ module.exports = function(mongoose) {
 
   var router = express.Router();
 
+  router.route('/:activity_id/images/:image_id')
+    .get(function(req, res) {
+      res.json({message:'got here'});
+    });
+
   router.route('/:activity_id')
 
     .get(function(req, res) {
