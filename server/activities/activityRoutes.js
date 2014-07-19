@@ -49,42 +49,57 @@ module.exports = function(mongoose) {
           return;
         }
 
-        //If the activity exists, add the image
-        var busboy = new Busboy({headers: req.headers});
-        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-          console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
+        try {
 
-          var writeStream = gfs.createWriteStream({
-            filename: filename, 
-            content_type: mimetype, 
-            mode: 'w'
-          });
+          //If the activity exists, add the image
+          var busboy = new Busboy({headers: req.headers});
+          var filePresent = false;
 
-          file.pipe(writeStream);
-          writeStream.on("close", function(file) {
+          busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+            console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
+            var filePresent = true;
 
-            activity.imageIds.push(file._id);
+            var writeStream = gfs.createWriteStream({
+              filename: filename, 
+              content_type: mimetype, 
+              mode: 'w'
+            });
 
-            //Save activity
-            activity.save(function(err, activity) {
-              //Return errors if necessary
-              if (err) {
-                res.send(err);
-                return;
-              }
-              res.json({ 
-                message: 'Image added to activity',
-                activity_id: activity._id
+            file.pipe(writeStream);
+            writeStream.on("close", function(file) {
+
+              activity.imageIds.push(file._id);
+
+              //Save activity
+              activity.save(function(err, activity) {
+                //Return errors if necessary
+                if (err) {
+                  res.send(err);
+                  return;
+                }
+                res.json({ 
+                  message: 'Image added to activity',
+                  activity_id: activity._id
+                });
               });
             });
           });
-        });
 
-        // busboy.on('finish', function() {
+          busboy.on('finish', function() {
+            if (!filePresent) {
+              res.json({
+                message: 'Must upload a file'
+              });
+            }
+          });
 
-        // });
+          req.pipe(busboy);
+        } catch(err) {
+          res.send({
+            message: 'Invalid data sent: doing nothing.'
+          });
+        }
 
-        req.pipe(busboy);
       });
     });
 
