@@ -39,12 +39,13 @@ router.get('/', function(req, res) {
   res.json({ message: 'Welcome to the freshly API!' });
 });
 
-var activityRouter = require('./server/activities/activityRoutes.js');
+var ActivityRoutes = require('./server/activities/activityRoutes.js');
+var activityRouter = ActivityRoutes(mongoose);
 
 // REGISTER ROUTES
 // ===============
 app.use('/api', router);
-app.use('/api', activityRouter);
+app.use('/api/activities', activityRouter);
 
 
 // START SERVER

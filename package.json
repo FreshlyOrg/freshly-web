@@ -20,6 +20,7 @@
   "dependencies": {
     "body-parser": "^1.4.3",
     "express": "^4.5.1",
+    "gridfs-stream": "^0.5.1",
     "mongoose": "^3.8.12"
   },
   "devDependencies": {
