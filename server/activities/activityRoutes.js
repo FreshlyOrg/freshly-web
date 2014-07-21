@@ -125,6 +125,14 @@ module.exports = function(mongoose) {
           return;
         }
 
+        if (!activity) {
+          res.json({ 
+            message: 'Activity does not exist',
+            activity_id: req.params.activity_id
+          });
+          return;
+        }
+
         try {
 
           //If the activity exists, add the image
@@ -242,51 +250,10 @@ module.exports = function(mongoose) {
           return;
         }
 
-        var toDelete = activity.imageIds.length;
-        console.log('todelete is: ') + toDelete;
-        if (toDelete === 0) {
-          res.json({
-            message: 'This activity and all images attached to this activity have been deleted',
-            activity: activity
-          });
-        } else {    
-          for (var i=0; i<activity.imageIds.length; i++) {
-            (function() {
-              var imageId = activity.imageIds[i];
-              gfs.exist({'_id': imageId}, function(err, found) {
-                if (err) {
-                  res.send(err);
-                  return;
-                }
-
-                if (found) {
-                  console.log('removing ' + i);
-                  gfs.remove({'_id': imageId}, function(err) {
-                    if (err) {
-                      res.send(err);
-                      return;
-                    }
-                    toDelete--;
-                    if (toDelete === 0) {
-                      res.json({
-                        message: 'This activity and all images attached to this activity have been deleted',
-                        activity: activity
-                      });
-                    }
-                  });
-                } else {
-                  toDelete--;
-                  if (toDelete === 0) {
-                    res.json({
-                      message: 'This activity and all images attached to this activity have been deleted',
-                      activity: activity
-                    });
-                  }
-                }
-              });
-            })();
-          }
-        }
+        res.json({ 
+          message: 'Activity deleted: ' + activity._id,
+          activity_id: activity._id
+        });
       });
     });
 
