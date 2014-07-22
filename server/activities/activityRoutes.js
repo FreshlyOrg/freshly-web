@@ -265,16 +265,14 @@ module.exports = function(mongoose) {
 
     .delete(function(req, res) {
       //Deletes activity
-      Activity.findByIdAndRemove(req.params.activity_id,{},function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        res.json({ 
-          message: 'Activity deleted: ' + activity._id,
+      Q.npost(Activity, 'findByIdAndRemove',[req.params.activity_id,{}]).then(function(activity) {
+        res.json({
+          message: 'Activity deleted!',
+          activity: activity,
           activity_id: activity._id
         });
+      }).catch(function(err) {
+        res.send(err);
       });
     });
 
@@ -307,7 +305,7 @@ module.exports = function(mongoose) {
           message: 'Activity updated!',
           activity: activity,
           activity_id: activity._id
-        })
+        });
       }).catch(function(err) {
         res.send(err);
       });
