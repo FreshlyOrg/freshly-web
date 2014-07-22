@@ -2,8 +2,10 @@ module.exports = function(mongoose) {
 
   var express = require('express');
   var Activity = require('./activityModel.js');
+  var helpers = require('./activityHelpers.js');
   var Grid = require('gridfs-stream');
   var Busboy = require('busboy');
+  var Q = require('q');
 
   //Used to parse and store incoming images
   Grid.mongo = mongoose.mongo;
@@ -281,25 +283,12 @@ module.exports = function(mongoose) {
 
     //Handles querying of all activities
     .get(function(req, res) {
-
-      Activity.find().exec().then(function(activities) {
+      //Converts mongoose's find method to a promise
+      Q.ninvoke(Activity, 'find').then(function(activities) {
         res.json(activities);
-      }, function(err) {
+      }).catch(function(err) {
         res.send(err);
-        return;
       });
-
-      // Activity.find(function(err, activities) {
-        
-      //   //Return errors if necessary
-      //   if (err) {
-      //     res.send(err);
-      //     return;
-      //   }
-
-      //   //Return array of activity objects (JSON format)
-      //   res.json(activities);
-      // });
     })
 
     //Handles creation of new activities
@@ -307,29 +296,21 @@ module.exports = function(mongoose) {
 
       //Create activity
       var activity = new Activity();
-      activity.name = req.body.name;
-      activity.description = req.body.description;
-      activity.cost = req.body.cost;
-      activity.time = req.body.time;
-      activity.lat = req.body.lat;
-      activity.lng = req.body.lng;
-      activity.tags = req.body.tags;
 
-      //Save activity
-      activity.save(function(err, activity) {
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
+      //Update activity with passed-in values
+      helpers.updateActivityFromRequest(req, activity);
 
-        //Return message on success
-        res.json({ 
-          message: 'Activity created: ' + activity._id,
+      //Converts mongoose's "save" method to a promise
+      Q.ninvoke(activity, 'save').then(function(activity) {
+        //Sends a response when the promise resolves
+        res.json({
+          message: 'Activity updated!',
+          activity: activity,
           activity_id: activity._id
-        });
+        })
+      }, function(err) {
+        res.send(err);
       });
-
     });
 
     return router;
