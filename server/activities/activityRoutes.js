@@ -14,8 +14,13 @@ module.exports = function(mongoose) {
 
   var router = express.Router();
 
+  //Used to handle routes pertaining to a specific image
   router.route('/:activity_id/images/:image_number')
+
+    //Returns a file
     .get(function(req, res) {
+
+      //Gets the activity, which will have a list of attached image IDs
       Activity.findById(req.params.activity_id, function(err, activity) {
         if (err) {
           res.send(err);
@@ -29,8 +34,10 @@ module.exports = function(mongoose) {
           });
           return;
         }
-        var imageId = activity.imageIds[req.params.image_number];
 
+        //Gets the image ID from the activity object and attempts
+        //to retrieve and return the file with that ID
+        var imageId = activity.imageIds[req.params.image_number];
         gfs.exist({'_id': imageId}, function(err, found) {
           if (err) {
             res.send(err);
@@ -47,12 +54,15 @@ module.exports = function(mongoose) {
       });
     })
 
+    //Overwrites a previously saved image with a new image
     .put(function(req, res) {
       Activity.findById(req.params.activity_id, function(err, activity) {
         if (err) {
           res.send(err);
           return;
         }
+
+        //Immediately returns if activity of the given ID is not found
         if (!activity) {
           res.json({ 
             message: 'Activity does not exist',
@@ -60,8 +70,11 @@ module.exports = function(mongoose) {
           });
           return;
         }
+
+        //Gets the specified imageID from the activity object
         var imageId = activity.imageIds[req.params.image_number];
 
+        //Only updates the image if the imageID exists
         gfs.exist({'_id': imageId}, function(err, found) {
           if (err) {
             res.send(err);
@@ -73,13 +86,18 @@ module.exports = function(mongoose) {
             try {
               //If the activity exists, add the image
               var busboy = new Busboy({headers: req.headers});
+
+              //Prevents the server from hanging when no
+              //file is passed
               var filePresent = false;
 
               busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
                 console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
+                //If file is present, response will wait until the file is processed before sending back anything
                 filePresent = true;
 
                 var writeStream = gfs.createWriteStream({
+                  //Need to set the ID here to make sure the original image is overwritten with this new one
                   '_id': imageId,
                   filename: filename, 
                   content_type: mimetype, 
@@ -95,6 +113,7 @@ module.exports = function(mongoose) {
                 });
               });
 
+              //Only sends a response here if no file was passed
               busboy.on('finish', function() {
                 if (!filePresent) {
                   res.json({
