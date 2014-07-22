@@ -282,17 +282,24 @@ module.exports = function(mongoose) {
     //Handles querying of all activities
     .get(function(req, res) {
 
-      Activity.find(function(err, activities) {
-        
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        //Return array of activity objects (JSON format)
+      Activity.find().exec().then(function(activities) {
         res.json(activities);
+      }, function(err) {
+        res.send(err);
+        return;
       });
+
+      // Activity.find(function(err, activities) {
+        
+      //   //Return errors if necessary
+      //   if (err) {
+      //     res.send(err);
+      //     return;
+      //   }
+
+      //   //Return array of activity objects (JSON format)
+      //   res.json(activities);
+      // });
     })
 
     //Handles creation of new activities
