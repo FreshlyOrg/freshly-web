@@ -308,7 +308,7 @@ module.exports = function(mongoose) {
           activity: activity,
           activity_id: activity._id
         })
-      }, function(err) {
+      }).catch(function(err) {
         res.send(err);
       });
     });
