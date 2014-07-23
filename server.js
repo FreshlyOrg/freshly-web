@@ -15,28 +15,13 @@ mongoose.connect(mongooseConnectionURL)
 //Defines port for azure deploy (or, failing that, for local deploy)
 var port = process.env.port || 8080;
 
-//Parses incoming form data onto request.body
+//bodyParser parses incoming data onto request.body:
 
 //Not strictly necessary, but nice to have for testing with Google's Postman tool
 app.use(bodyParser.urlencoded({ extended: true }));
 
 //The mobile app will primarily be sending data in JSON format
 app.use(bodyParser.json());
-
-//Only accepts a single file at a time (any more will be ignored)
-app.use(function(req, res, next) {
-  if (req.files) {
-    for (var filename in req.files) {
-      req.file = req.files[filename];
-      
-      //Gives a default name to uploaded files with no name
-      req.file.originalname = req.file.originalname || 'UserUploadedFile'
-      break;
-    }
-  }
-
-  next();
-});
 
 // STATIC FILE SERVING
 // ===================
