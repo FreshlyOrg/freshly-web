@@ -212,18 +212,13 @@ module.exports = function(mongoose) {
   router.route('/:activity_id')
 
     .get(function(req, res) {
-      //Find activity
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
 
-        //Else returns activity object (JSON)
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         res.json(activity);
+      }).catch(function(err) {
+        res.send(err);
       });
+
     })
 
     .put(function(req, res) {
