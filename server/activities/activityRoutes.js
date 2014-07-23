@@ -227,44 +227,24 @@ module.exports = function(mongoose) {
     })
 
     .put(function(req, res) {
-      //Find activity
-      Activity.findById(req.params.activity_id, function(err, activity) {
 
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        //Update activity
-        activity.name = req.body.name;
-        activity.description = req.body.description;
-        activity.cost = req.body.cost;
-        activity.time = req.body.time;
-        activity.lat = req.body.lat;
-        activity.lng = req.body.lng;
-        activity.tags = req.body.tags;
-
-        //Save activity
-        activity.save(function(err) {
-
-          //Return errors if necessary
-          if (err) {
-            res.send(err);
-            return;
-          }
-
-          //Return message on success
-          res.json({ 
-            message: 'Activity updated: ' + activity._id,
-            activity_id: activity._id
-          });
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
+        helpers.updateActivityFromRequest(req, activity);
+        return Q.ninvoke(activity, 'save');
+      }).then(function(activity) {
+        res.json({
+          message: 'Activity updated!',
+          activity: activity,
+          activity_id: activity._id
         });
+      }).catch(function(err) {
+        res.send(err);
       });
+
     })
 
     .delete(function(req, res) {
-      //Deletes activity
+      //Deletes activity (after converting mongoose callback to a promise)
       Q.npost(Activity, 'findByIdAndRemove',[req.params.activity_id,{}]).then(function(activity) {
         res.json({
           message: 'Activity deleted!',
@@ -302,7 +282,7 @@ module.exports = function(mongoose) {
       Q.ninvoke(activity, 'save').then(function(activity) {
         //Sends a response when the promise resolves
         res.json({
-          message: 'Activity updated!',
+          message: 'Activity created!',
           activity: activity,
           activity_id: activity._id
         });

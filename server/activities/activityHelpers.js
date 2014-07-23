@@ -7,5 +7,6 @@ module.exports = {
     activity.lat = req.body.lat;
     activity.lng = req.body.lng;
     activity.tags = req.body.tags;
+    return activity;
   }
 };
