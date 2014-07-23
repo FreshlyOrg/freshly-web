@@ -138,75 +138,154 @@ module.exports = function(mongoose) {
     });
 
   router.route('/:activity_id/images')
+
+
     //Adds an image and links it to the given activity
     .post(function(req, res) {
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
 
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
+        }
+      }).then(function(activity) {
+        //Only uses the first file passed in (if more than one file is passed)
+        var file;
+        for (var filename in req.files) {
+          file = req.files[filename];
+          break;
         }
 
-        try {
-
-          //If the activity exists, add the image
-          var busboy = new Busboy({headers: req.headers});
-          var filePresent = false;
-
-          busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-            console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
-            filePresent = true;
-
-            var writeStream = gfs.createWriteStream({
-              filename: filename, 
-              content_type: mimetype, 
-              mode: 'w'
-            });
-
-            file.pipe(writeStream);
-            writeStream.on("close", function(file) {
-
-              activity.imageIds.push(file._id);
-
-              //Save activity
-              activity.save(function(err, activity) {
-                //Return errors if necessary
-                if (err) {
-                  res.send(err);
-                  return;
-                }
-
-                res.json({ 
-                  message: 'Image added to activity',
-                  activity_id: activity._id
-                });
-              });
-            });
-          });
-
-          busboy.on('finish', function() {
-            if (!filePresent) {
-              res.json({
-                message: 'Must upload a file'
-              });
-            }
-          });
-
-          req.pipe(busboy);
-        } catch(err) {
-          res.send({
-            message: 'Invalid data sent: doing nothing.'
-          });
+        //Throws an error if no file was passed in with the POST request
+        if (!file) {
+          console.log('throwing error');
+          throw new Error('Must send an image file!');
         }
 
+        res.json({
+          message: file.mimetype
+        });
+        //Keeps track of whether busboy got a file
+        //(if not, we can return a result when busboy "finishes",
+        // otherwise we want to wait until the file is written to the
+        // server so we can save its ID)
+        // var fileReceived = false;
+
+        // //Listens to a file event (runs only if file was passed to server)
+        // busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+
+        //   //Creates a writestream to write the file to the database
+        //   var writeStream = gfs.createWriteStream({
+        //     filename: filename, 
+        //     content_type: mimetype, 
+        //     mode: 'w'
+        //   });
+
+        //   //Sends the file to the writestream
+        //   file.pipe(writeStream);
+
+        //   //When the writestream finishes with the file,
+        //   //updates the activity's imageIds array
+        //   writeStream.on("close", function(file) {
+
+        //     activity.imageIds.push(file._id);
+
+        //     //Save activity
+        //     activity.save(function(err, activity) {
+        //       //Return errors if necessary
+        //       if (err) {
+        //         res.send(err);
+        //         return;
+        //       }
+
+        //       res.json({ 
+        //         message: 'Image added to activity',
+        //         activity_id: activity._id
+        //       });
+        //     });
+        //   });
+        // });
+
+        // busboy.on('finish', function() {
+        //   if (!filePresent) {
+        //     res.json({
+        //       message: 'Must upload a file'
+        //     });
+        //   }
+        // });
+      })
+
+      .catch(function(err) {
+        res.send('Error: ' + err.message);
       });
+
+
+      // Activity.findById(req.params.activity_id, function(err, activity) {
+      //   if (err) {
+      //     res.send(err);
+      //     return;
+      //   }
+
+      //   if (!activity) {
+      //     res.json({ 
+      //       message: 'Activity does not exist',
+      //       activity_id: req.params.activity_id
+      //     });
+      //     return;
+      //   }
+
+      //   try {
+
+      //     //If the activity exists, add the image
+      //     var busboy = new Busboy({headers: req.headers});
+      //     var filePresent = false;
+
+          // busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+
+          //   var writeStream = gfs.createWriteStream({
+          //     filename: filename, 
+          //     content_type: mimetype, 
+          //     mode: 'w'
+          //   });
+
+          //   file.pipe(writeStream);
+          //   writeStream.on("close", function(file) {
+
+          //     activity.imageIds.push(file._id);
+
+          //     //Save activity
+          //     activity.save(function(err, activity) {
+          //       //Return errors if necessary
+          //       if (err) {
+          //         res.send(err);
+          //         return;
+          //       }
+
+          //       res.json({ 
+          //         message: 'Image added to activity',
+          //         activity_id: activity._id
+          //       });
+          //     });
+          //   });
+          // });
+
+          // busboy.on('finish', function() {
+          //   if (!filePresent) {
+          //     res.json({
+          //       message: 'Must upload a file'
+          //     });
+          //   }
+          // });
+
+      //     req.pipe(busboy);
+      //   } catch(err) {
+      //     res.send({
+      //       message: 'Invalid data sent: doing nothing.'
+      //     });
+      //   }
+
+      // });
     });
 
   router.route('/:activity_id')
@@ -216,7 +295,7 @@ module.exports = function(mongoose) {
       Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         res.json(activity);
       }).catch(function(err) {
-        res.send(err);
+        res.send('Error: ' + err.message);
       });
 
     })
@@ -233,7 +312,7 @@ module.exports = function(mongoose) {
           activity_id: activity._id
         });
       }).catch(function(err) {
-        res.send(err);
+        res.send('Error: ' + err.message);
       });
 
     })
@@ -247,7 +326,7 @@ module.exports = function(mongoose) {
           activity_id: activity._id
         });
       }).catch(function(err) {
-        res.send(err);
+        res.send('Error: ' + err.message);
       });
     });
 
@@ -260,7 +339,7 @@ module.exports = function(mongoose) {
       Q.ninvoke(Activity, 'find').then(function(activities) {
         res.json(activities);
       }).catch(function(err) {
-        res.send(err);
+        res.send('Error: ' + err.message);
       });
     })
 
@@ -282,7 +361,7 @@ module.exports = function(mongoose) {
           activity_id: activity._id
         });
       }).catch(function(err) {
-        res.send(err);
+        res.send('Error: ' + err.message);
       });
     });
 

@@ -4,6 +4,7 @@ var app = express();
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
 var Activity = require('./server/activities/activityModel');
+var multer = require('multer');
 
 // BASIC SETUP
 // ===========
@@ -22,6 +23,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 //The mobile app will primarily be sending data in JSON format
 app.use(bodyParser.json());
+
+//Accepts incoming form data (used to handle incoming files)
+app.use(multer());
 
 // STATIC FILE SERVING
 // ===================
