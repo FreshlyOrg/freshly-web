@@ -22,37 +22,32 @@ module.exports = function(mongoose) {
     //Returns a file
     .get(function(req, res) {
 
-      //Gets the activity, which will have a list of attached image IDs
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
-
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
         }
 
-        //Gets the image ID from the activity object and attempts
-        //to retrieve and return the file with that ID
+        //Checks that the activity has an image at this index
         var imageId = activity.imageIds[req.params.image_number];
-        gfs.exist({'_id': imageId}, function(err, found) {
-          if (err) {
-            res.send(err);
-            return;
+        if (!imageId) {
+          throw new Error('Activity does not have this image!');
+        }
+        
+        //Checks whether the given image id exists in the database
+        return Q.ninvoke(gfs, 'exist', {'_id': imageId}).then(function(found) {
+          if (!found) {
+            throw new Error('Activity does not have an image with this ID!');
           }
-          
-          if (found) {
-            var readStream = gfs.createReadStream({'_id': imageId});
-            readStream.pipe(res);
-          } else {
-            res.json({message: 'Image not found'});
-          }
+
+          //Passes this object to the next .then() call
+          return imageId;
         });
+
+      }).then(function(imageId) {
+        var readStream = gfs.createReadStream({'_id': imageId});
+        readStream.pipe(res);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     })
 
