@@ -139,7 +139,6 @@ module.exports = function(mongoose) {
 
   router.route('/:activity_id/images')
 
-
     //Adds an image and links it to the given activity
     .post(function(req, res) {
 
@@ -150,142 +149,57 @@ module.exports = function(mongoose) {
           return activity;
         }
       }).then(function(activity) {
-        //Only uses the first file passed in (if more than one file is passed)
-        var file;
-        for (var filename in req.files) {
-          file = req.files[filename];
-          break;
-        }
+        //Busboy reads in the incoming file
+        var busboy = new Busboy({headers: req.headers});
 
-        //Throws an error if no file was passed in with the POST request
-        if (!file) {
-          console.log('throwing error');
-          throw new Error('Must send an image file!');
-        }
+        //Prevents the server from hanging when no
+        //file is passed
+        var filePresent = false;
 
-        res.json({
-          message: file.mimetype
+        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+          filePresent = true;
+
+          //Creates a stream for writing the image to the database
+          var writeStream = gfs.createWriteStream({
+            filename: filename, 
+            content_type: mimetype, 
+            mode: 'w'
+          });
+
+          //Sends the file to the stream
+          file.pipe(writeStream);
+
+          //When the file finishes writing to the DB,
+          //update the activity's imageIds and send
+          //back a response
+          writeStream.on("close", function(file) {
+            activity.imageIds.push(file._id);
+            Q.ninvoke(activity, 'save').then(function(activity) {
+              res.json({
+                message: 'Image saved to activity!',
+                activity: activity,
+                activity_id: activity._id,
+                image_id: file._id
+              });
+            }).catch(function(err) {
+              res.send('Error: ' + err.message);
+            });
+          });
         });
-        //Keeps track of whether busboy got a file
-        //(if not, we can return a result when busboy "finishes",
-        // otherwise we want to wait until the file is written to the
-        // server so we can save its ID)
-        // var fileReceived = false;
 
-        // //Listens to a file event (runs only if file was passed to server)
-        // busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+        //Only sends a response here if no file was passed
+        busboy.on('finish', function() {
+          if (!filePresent) {
+            res.send('Error: Must send an image file!');
+          }
+        });
 
-        //   //Creates a writestream to write the file to the database
-        //   var writeStream = gfs.createWriteStream({
-        //     filename: filename, 
-        //     content_type: mimetype, 
-        //     mode: 'w'
-        //   });
+        //Sends the request object to busboy for handling
+        req.pipe(busboy);
 
-        //   //Sends the file to the writestream
-        //   file.pipe(writeStream);
-
-        //   //When the writestream finishes with the file,
-        //   //updates the activity's imageIds array
-        //   writeStream.on("close", function(file) {
-
-        //     activity.imageIds.push(file._id);
-
-        //     //Save activity
-        //     activity.save(function(err, activity) {
-        //       //Return errors if necessary
-        //       if (err) {
-        //         res.send(err);
-        //         return;
-        //       }
-
-        //       res.json({ 
-        //         message: 'Image added to activity',
-        //         activity_id: activity._id
-        //       });
-        //     });
-        //   });
-        // });
-
-        // busboy.on('finish', function() {
-        //   if (!filePresent) {
-        //     res.json({
-        //       message: 'Must upload a file'
-        //     });
-        //   }
-        // });
-      })
-
-      .catch(function(err) {
+      }).catch(function(err) {
         res.send('Error: ' + err.message);
       });
-
-
-      // Activity.findById(req.params.activity_id, function(err, activity) {
-      //   if (err) {
-      //     res.send(err);
-      //     return;
-      //   }
-
-      //   if (!activity) {
-      //     res.json({ 
-      //       message: 'Activity does not exist',
-      //       activity_id: req.params.activity_id
-      //     });
-      //     return;
-      //   }
-
-      //   try {
-
-      //     //If the activity exists, add the image
-      //     var busboy = new Busboy({headers: req.headers});
-      //     var filePresent = false;
-
-          // busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-
-          //   var writeStream = gfs.createWriteStream({
-          //     filename: filename, 
-          //     content_type: mimetype, 
-          //     mode: 'w'
-          //   });
-
-          //   file.pipe(writeStream);
-          //   writeStream.on("close", function(file) {
-
-          //     activity.imageIds.push(file._id);
-
-          //     //Save activity
-          //     activity.save(function(err, activity) {
-          //       //Return errors if necessary
-          //       if (err) {
-          //         res.send(err);
-          //         return;
-          //       }
-
-          //       res.json({ 
-          //         message: 'Image added to activity',
-          //         activity_id: activity._id
-          //       });
-          //     });
-          //   });
-          // });
-
-          // busboy.on('finish', function() {
-          //   if (!filePresent) {
-          //     res.json({
-          //       message: 'Must upload a file'
-          //     });
-          //   }
-          // });
-
-      //     req.pipe(busboy);
-      //   } catch(err) {
-      //     res.send({
-      //       message: 'Invalid data sent: doing nothing.'
-      //     });
-      //   }
-
-      // });
     });
 
   router.route('/:activity_id')

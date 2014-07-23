@@ -4,7 +4,6 @@ var app = express();
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
 var Activity = require('./server/activities/activityModel');
-var multer = require('multer');
 
 // BASIC SETUP
 // ===========
@@ -24,8 +23,20 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //The mobile app will primarily be sending data in JSON format
 app.use(bodyParser.json());
 
-//Accepts incoming form data (used to handle incoming files)
-app.use(multer());
+//Only accepts a single file at a time (any more will be ignored)
+app.use(function(req, res, next) {
+  if (req.files) {
+    for (var filename in req.files) {
+      req.file = req.files[filename];
+      
+      //Gives a default name to uploaded files with no name
+      req.file.originalname = req.file.originalname || 'UserUploadedFile'
+      break;
+    }
+  }
+
+  next();
+});
 
 // STATIC FILE SERVING
 // ===================
