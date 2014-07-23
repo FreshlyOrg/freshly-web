@@ -203,6 +203,7 @@ module.exports = function(mongoose) {
 
   router.route('/:activity_id')
 
+    //Returns the activity with the given ID
     .get(function(req, res) {
 
       Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
@@ -213,6 +214,7 @@ module.exports = function(mongoose) {
 
     })
 
+    //Updates the activity with the given ID
     .put(function(req, res) {
 
       Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
@@ -230,8 +232,8 @@ module.exports = function(mongoose) {
 
     })
 
+    //Deletes activity with the given ID
     .delete(function(req, res) {
-      //Deletes activity (after converting mongoose callback to a promise)
       Q.npost(Activity, 'findByIdAndRemove',[req.params.activity_id,{}]).then(function(activity) {
         res.json({
           message: 'Activity deleted!',
@@ -279,4 +281,4 @@ module.exports = function(mongoose) {
     });
 
     return router;
-}
+};
