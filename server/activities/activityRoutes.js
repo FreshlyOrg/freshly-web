@@ -58,82 +58,86 @@ module.exports = function(mongoose) {
 
     //Overwrites a previously saved image with a new image
     .put(function(req, res) {
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
 
-        //Immediately returns if activity of the given ID is not found
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
         }
+      }).then(function(activity) {
 
         //Gets the specified imageID from the activity object
         var imageId = activity.imageIds[req.params.image_number];
 
-        //Only updates the image if the imageID exists
-        gfs.exist({'_id': imageId}, function(err, found) {
-          if (err) {
-            res.send(err);
-            return;
+        if (!imageId) {
+          throw new Error('Activity does not have this image!');
+        }
+
+        //Checks whether the given image id exists in the database
+        return Q.ninvoke(gfs, 'exist', {'_id': imageId}).then(function(found) {
+          if (!found) {
+            throw new Error('Activity does not have an image with this ID!');
           }
-          
-          //Updates the currently saved image
-          if (found) {
-            try {
-              //If the activity exists, add the image
-              var busboy = new Busboy({headers: req.headers});
 
-              //Prevents the server from hanging when no
-              //file is passed
-              var filePresent = false;
+          //Passes this object to the next .then() call
+          return {
+            activity: activity,
+            imageId: imageId
+          };
+        })
 
-              busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-                console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
-                //If file is present, response will wait until the file is processed before sending back anything
-                filePresent = true;
+      }).then(function(infoObj) {
+        //Updates the image
+        
+        //Busboy reads in the incoming file
+        var busboy = new Busboy({headers: req.headers});
 
-                var writeStream = gfs.createWriteStream({
-                  //Need to set the ID here to make sure the original image is overwritten with this new one
-                  '_id': imageId,
-                  filename: filename, 
-                  content_type: mimetype, 
-                  mode: 'w'
-                });
+        //Prevents the server from hanging when no
+        //file is passed
+        var filePresent = false;
 
-                file.pipe(writeStream);
-                writeStream.on("close", function(file) {
-                  res.json({ 
-                    message: 'Activity image updated',
-                    activity_id: activity._id
-                  });
-                });
-              });
+        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+          filePresent = true;
 
-              //Only sends a response here if no file was passed
-              busboy.on('finish', function() {
-                if (!filePresent) {
-                  res.json({
-                    message: 'Must upload a file'
-                  });
-                }
-              });
+          //Creates a stream for writing the image to the database
+          var writeStream = gfs.createWriteStream({
+            //Including this _id property ensures that the currently-existing
+            //image gets overwritten
+            '_id': infoObj.imageId,
+            filename: filename, 
+            content_type: mimetype, 
+            mode: 'w'
+          });
 
-              req.pipe(busboy);
-            } catch(err) {
-              res.send({
-                message: 'Invalid data sent: doing nothing.'
-              });
-            }
-          } else {
-            res.json({message: 'Image not found'});
+          //Sends the file to the stream
+          file.pipe(writeStream);
+
+          //When the file finishes writing to the DB,
+          //update the activity's imageIds and send
+          //back a response
+          writeStream.on("close", function(file) {
+            res.json({
+              message: 'Activity Image Updated!',
+              activity: infoObj.activity,
+              activity_id: infoObj.activity._id,
+              image_index: req.params.image_number,
+              image_id: file._id
+            });
+          });
+        });
+
+        //Only sends a response here if no file was passed
+        busboy.on('finish', function() {
+          if (!filePresent) {
+            res.send('Error: Must send an image file!');
           }
         });
+
+        //Sends the request object to busboy for handling
+        req.pipe(busboy);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     });
 
