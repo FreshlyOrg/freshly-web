@@ -2,8 +2,10 @@ module.exports = function(mongoose) {
 
   var express = require('express');
   var Activity = require('./activityModel.js');
+  var helpers = require('./activityHelpers.js');
   var Grid = require('gridfs-stream');
   var Busboy = require('busboy');
+  var Q = require('q');
 
   //Used to parse and store incoming images
   Grid.mongo = mongoose.mongo;
@@ -20,259 +22,226 @@ module.exports = function(mongoose) {
     //Returns a file
     .get(function(req, res) {
 
-      //Gets the activity, which will have a list of attached image IDs
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
-
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
         }
 
-        //Gets the image ID from the activity object and attempts
-        //to retrieve and return the file with that ID
+        //Checks that the activity has an image at this index
         var imageId = activity.imageIds[req.params.image_number];
-        gfs.exist({'_id': imageId}, function(err, found) {
-          if (err) {
-            res.send(err);
-            return;
+        if (!imageId) {
+          throw new Error('Activity does not have this image!');
+        }
+        
+        //Checks whether the given image id exists in the database
+        return Q.ninvoke(gfs, 'exist', {'_id': imageId}).then(function(found) {
+          if (!found) {
+            throw new Error('Activity does not have an image with this ID!');
           }
-          
-          if (found) {
-            var readStream = gfs.createReadStream({'_id': imageId});
-            readStream.pipe(res);
-          } else {
-            res.json({message: 'Image not found'});
-          }
+
+          //Passes this object to the next .then() call
+          return imageId;
         });
+
+      }).then(function(imageId) {
+        var readStream = gfs.createReadStream({'_id': imageId});
+        readStream.pipe(res);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     })
 
     //Overwrites a previously saved image with a new image
     .put(function(req, res) {
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
 
-        //Immediately returns if activity of the given ID is not found
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
         }
+      }).then(function(activity) {
 
         //Gets the specified imageID from the activity object
         var imageId = activity.imageIds[req.params.image_number];
 
-        //Only updates the image if the imageID exists
-        gfs.exist({'_id': imageId}, function(err, found) {
-          if (err) {
-            res.send(err);
-            return;
+        if (!imageId) {
+          throw new Error('Activity does not have this image!');
+        }
+
+        //Checks whether the given image id exists in the database
+        return Q.ninvoke(gfs, 'exist', {'_id': imageId}).then(function(found) {
+          if (!found) {
+            throw new Error('Activity does not have an image with this ID!');
           }
-          
-          //Updates the currently saved image
-          if (found) {
-            try {
-              //If the activity exists, add the image
-              var busboy = new Busboy({headers: req.headers});
 
-              //Prevents the server from hanging when no
-              //file is passed
-              var filePresent = false;
+          //Passes this object to the next .then() call
+          return {
+            activity: activity,
+            imageId: imageId
+          };
+        })
 
-              busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-                console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
-                //If file is present, response will wait until the file is processed before sending back anything
-                filePresent = true;
+      }).then(function(infoObj) {
+        //Updates the image
+        
+        //Busboy reads in the incoming file
+        var busboy = new Busboy({headers: req.headers});
 
-                var writeStream = gfs.createWriteStream({
-                  //Need to set the ID here to make sure the original image is overwritten with this new one
-                  '_id': imageId,
-                  filename: filename, 
-                  content_type: mimetype, 
-                  mode: 'w'
-                });
+        //Prevents the server from hanging when no
+        //file is passed
+        var filePresent = false;
 
-                file.pipe(writeStream);
-                writeStream.on("close", function(file) {
-                  res.json({ 
-                    message: 'Activity image updated',
-                    activity_id: activity._id
-                  });
-                });
-              });
+        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+          filePresent = true;
 
-              //Only sends a response here if no file was passed
-              busboy.on('finish', function() {
-                if (!filePresent) {
-                  res.json({
-                    message: 'Must upload a file'
-                  });
-                }
-              });
+          //Creates a stream for writing the image to the database
+          var writeStream = gfs.createWriteStream({
+            //Including this _id property ensures that the currently-existing
+            //image gets overwritten
+            '_id': infoObj.imageId,
+            filename: filename, 
+            content_type: mimetype, 
+            mode: 'w'
+          });
 
-              req.pipe(busboy);
-            } catch(err) {
-              res.send({
-                message: 'Invalid data sent: doing nothing.'
-              });
-            }
-          } else {
-            res.json({message: 'Image not found'});
+          //Sends the file to the stream
+          file.pipe(writeStream);
+
+          //When the file finishes writing to the DB,
+          //update the activity's imageIds and send
+          //back a response
+          writeStream.on("close", function(file) {
+            res.json({
+              message: 'Activity Image Updated!',
+              activity: infoObj.activity,
+              activity_id: infoObj.activity._id,
+              image_index: req.params.image_number,
+              image_id: file._id
+            });
+          });
+        });
+
+        //Only sends a response here if no file was passed
+        busboy.on('finish', function() {
+          if (!filePresent) {
+            res.send('Error: Must send an image file!');
           }
         });
+
+        //Sends the request object to busboy for handling
+        req.pipe(busboy);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     });
 
   router.route('/:activity_id/images')
+
     //Adds an image and links it to the given activity
     .post(function(req, res) {
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
 
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         if (!activity) {
-          res.json({ 
-            message: 'Activity does not exist',
-            activity_id: req.params.activity_id
-          });
-          return;
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
         }
+      }).then(function(activity) {
+        //Busboy reads in the incoming file
+        var busboy = new Busboy({headers: req.headers});
 
-        try {
+        //Prevents the server from hanging when no
+        //file is passed
+        var filePresent = false;
 
-          //If the activity exists, add the image
-          var busboy = new Busboy({headers: req.headers});
-          var filePresent = false;
+        busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
+          filePresent = true;
 
-          busboy.on('file', function(fieldname, file, filename, encoding, mimetype) {
-            console.log('File [' + fieldname + ']: filename: ' + filename + ', encoding: ' + encoding + ', mimetype: ' + mimetype);
-            filePresent = true;
-
-            var writeStream = gfs.createWriteStream({
-              filename: filename, 
-              content_type: mimetype, 
-              mode: 'w'
-            });
-
-            file.pipe(writeStream);
-            writeStream.on("close", function(file) {
-
-              activity.imageIds.push(file._id);
-
-              //Save activity
-              activity.save(function(err, activity) {
-                //Return errors if necessary
-                if (err) {
-                  res.send(err);
-                  return;
-                }
-
-                res.json({ 
-                  message: 'Image added to activity',
-                  activity_id: activity._id
-                });
-              });
-            });
+          //Creates a stream for writing the image to the database
+          var writeStream = gfs.createWriteStream({
+            filename: filename, 
+            content_type: mimetype, 
+            mode: 'w'
           });
 
-          busboy.on('finish', function() {
-            if (!filePresent) {
+          //Sends the file to the stream
+          file.pipe(writeStream);
+
+          //When the file finishes writing to the DB,
+          //update the activity's imageIds and send
+          //back a response
+          writeStream.on("close", function(file) {
+            activity.imageIds.push(file._id);
+            Q.ninvoke(activity, 'save').then(function(activity) {
               res.json({
-                message: 'Must upload a file'
+                message: 'Image saved to activity!',
+                activity: activity,
+                activity_id: activity._id,
+                image_id: file._id
               });
-            }
+            }).catch(function(err) {
+              res.send('Error: ' + err.message);
+            });
           });
+        });
 
-          req.pipe(busboy);
-        } catch(err) {
-          res.send({
-            message: 'Invalid data sent: doing nothing.'
-          });
-        }
+        //Only sends a response here if no file was passed
+        busboy.on('finish', function() {
+          if (!filePresent) {
+            res.send('Error: Must send an image file!');
+          }
+        });
 
+        //Sends the request object to busboy for handling
+        req.pipe(busboy);
+
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     });
 
   router.route('/:activity_id')
 
+    //Returns the activity with the given ID
     .get(function(req, res) {
-      //Find activity
-      Activity.findById(req.params.activity_id, function(err, activity) {
-        
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
 
-        //Else returns activity object (JSON)
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
         res.json(activity);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
+
     })
 
+    //Updates the activity with the given ID
     .put(function(req, res) {
-      //Find activity
-      Activity.findById(req.params.activity_id, function(err, activity) {
 
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        //Update activity
-        activity.name = req.body.name;
-        activity.description = req.body.description;
-        activity.cost = req.body.cost;
-        activity.time = req.body.time;
-        activity.lat = req.body.lat;
-        activity.lng = req.body.lng;
-        activity.tags = req.body.tags;
-
-        //Save activity
-        activity.save(function(err) {
-
-          //Return errors if necessary
-          if (err) {
-            res.send(err);
-            return;
-          }
-
-          //Return message on success
-          res.json({ 
-            message: 'Activity updated: ' + activity._id,
-            activity_id: activity._id
-          });
-        });
-      });
-    })
-
-    .delete(function(req, res) {
-      //Deletes activity
-      Activity.findByIdAndRemove(req.params.activity_id,{},function(err, activity) {
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        res.json({ 
-          message: 'Activity deleted: ' + activity._id,
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
+        helpers.updateActivityFromRequest(req, activity);
+        return Q.ninvoke(activity, 'save');
+      }).then(function(activity) {
+        res.json({
+          message: 'Activity updated!',
+          activity: activity,
           activity_id: activity._id
         });
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
+      });
+
+    })
+
+    //Deletes activity with the given ID
+    .delete(function(req, res) {
+      Q.npost(Activity, 'findByIdAndRemove',[req.params.activity_id,{}]).then(function(activity) {
+        res.json({
+          message: 'Activity deleted!',
+          activity: activity,
+          activity_id: activity._id
+        });
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     });
 
@@ -281,17 +250,11 @@ module.exports = function(mongoose) {
 
     //Handles querying of all activities
     .get(function(req, res) {
-
-      Activity.find(function(err, activities) {
-        
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
-
-        //Return array of activity objects (JSON format)
+      //Converts mongoose's find method to a promise
+      Q.ninvoke(Activity, 'find').then(function(activities) {
         res.json(activities);
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
     })
 
@@ -300,30 +263,22 @@ module.exports = function(mongoose) {
 
       //Create activity
       var activity = new Activity();
-      activity.name = req.body.name;
-      activity.description = req.body.description;
-      activity.cost = req.body.cost;
-      activity.time = req.body.time;
-      activity.lat = req.body.lat;
-      activity.lng = req.body.lng;
-      activity.tags = req.body.tags;
 
-      //Save activity
-      activity.save(function(err, activity) {
-        //Return errors if necessary
-        if (err) {
-          res.send(err);
-          return;
-        }
+      //Update activity with passed-in values
+      helpers.updateActivityFromRequest(req, activity);
 
-        //Return message on success
-        res.json({ 
-          message: 'Activity created: ' + activity._id,
+      //Converts mongoose's "save" method to a promise
+      Q.ninvoke(activity, 'save').then(function(activity) {
+        //Sends a response when the promise resolves
+        res.json({
+          message: 'Activity created!',
+          activity: activity,
           activity_id: activity._id
         });
+      }).catch(function(err) {
+        res.send('Error: ' + err.message);
       });
-
     });
 
     return router;
-}
+};

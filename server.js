@@ -15,7 +15,7 @@ mongoose.connect(mongooseConnectionURL)
 //Defines port for azure deploy (or, failing that, for local deploy)
 var port = process.env.port || 8080;
 
-//Parses incoming form data onto request.body
+//bodyParser parses incoming data onto request.body:
 
 //Not strictly necessary, but nice to have for testing with Google's Postman tool
 app.use(bodyParser.urlencoded({ extended: true }));
