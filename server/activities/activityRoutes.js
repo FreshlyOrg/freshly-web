@@ -199,6 +199,46 @@ module.exports = function(mongoose) {
       }).catch(function(err) {
         res.send('Error: ' + err.message);
       });
+    })
+  
+    //Deletes all images attached to the activity
+    .delete(function(req, res) {
+      Q.ninvoke(Activity, 'findById', req.params.activity_id).then(function(activity) {
+        if (!activity) {
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
+        }
+      }).then(function(activity) {
+        var deletePromises = [];
+        console.log(activity);
+
+        for (var i=0; i<activity.imageIds.length; i++) {
+          var imageId = activity.imageIds[i];
+          console.log(imageId);
+          var deletePromise = Q.ninvoke(gfs, 'remove', {
+            '_id': imageId
+          });
+          deletePromises.push(deletePromise);
+        }
+
+        //Returns a promise that resolves when all the delete promises resolve
+        return Q.all(deletePromises).then(function() {
+          activity.imageIds = [];
+          return Q.ninvoke(activity, 'save');
+        });
+
+      }).then(function(activity) {
+        //All were deleted successfully
+        res.json({
+          message: 'All images deleted for this activity!',
+          activity: activity,
+          activity_id: activity._id
+        });
+      }).catch(function(err) {
+        //Something went wrong
+        res.send('Error: ' + err.message);
+      });
     });
 
   router.route('/:activity_id')
@@ -235,8 +275,26 @@ module.exports = function(mongoose) {
     //Deletes activity with the given ID
     .delete(function(req, res) {
       Q.npost(Activity, 'findByIdAndRemove',[req.params.activity_id,{}]).then(function(activity) {
+        if (!activity) {
+          throw new Error('Activity does not exist!');
+        } else {
+          return activity;
+        }
+      }).then(function(activity) {
+        var deletePromises = [];
+        for (var i=0; i<activity.imageIds.length; i++) {
+          var imageId = activity.imageIds[i];
+          var deletePromise = Q.ninvoke(gfs, 'remove', {'_id': imageId});
+          deletePromises.push(deletePromise);
+        }
+
+        //Returns a promise that resolves when all the delete promises resolve
+        return Q.all(deletePromises).then(function() {
+          return activity;
+        });
+      }).then(function(activity) {
         res.json({
-          message: 'Activity deleted!',
+          message: 'Activity deleted (along with all attached images)!',
           activity: activity,
           activity_id: activity._id
         });
